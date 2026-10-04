@@ -40,9 +40,19 @@ public struct AddrTable() : IEnumerable<AddrInfo>
         }
         if (colls > Collisions) Collisions = colls;
 
-        // When returning an unpopulated AddrInfo, assume it's going to get populated shortly and consider it used
-        // immediately.
-        if (info.addr == 0 && Entries++ > Size * LoadFactor) ResizeHashtable();
+        // The caller initializes an empty slot after this method returns. Resize
+        // before reserving it, then probe the new array so the returned reference
+        // cannot point into the array discarded by ResizeHashtable.
+        if (info.addr == 0)
+        {
+            if (Entries >= Size * LoadFactor)
+            {
+                ResizeHashtable();
+                return ref GetOrCreateAddrInfo(ret);
+            }
+
+            Entries++;
+        }
         return ref info;
     }
 

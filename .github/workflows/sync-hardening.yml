@@ -1,0 +1,53 @@
+name: Sync hardening
+on:
+  push:
+    branches: [sync-hardening]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test manifest equality preflight
+        run: python -m unittest discover -s Tools -p "test_*.py"
+      - name: Build release
+        run: dotnet build Source/ --configuration Release
+      - name: Test upstream and cache regressions
+        run: dotnet test Source/Tests/Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=upstream.trx" --results-directory test-results
+      - name: Test diagnostic failure containment
+        run: dotnet test Source/DesyncSafetyTests/DesyncSafetyTests.csproj --configuration Release --logger "trx;LogFileName=safety.trx" --results-directory test-results
+      - name: Preserve results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.os }}
+          path: test-results
+      - name: Preserve experimental mod build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-mod-${{ matrix.os }}
+          path: |
+            About
+            Assemblies
+            AssembliesCustom
+            Defs
+            Languages
+            Textures

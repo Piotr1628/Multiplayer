@@ -36,7 +36,7 @@ namespace Multiplayer.Client
 
         public MultiplayerGame()
         {
-            DeferredStackTracing.acc = 0;
+            DeferredStackTracing.Reset();
 
             Toils_Ingest.cardinals = GenAdj.CardinalDirections.ToList();
             Toils_Ingest.diagonals = GenAdj.DiagonalDirections.ToList();

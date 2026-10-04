@@ -25,6 +25,13 @@ namespace Multiplayer.Client
         public readonly List<ClientSyncOpinion> knownClientOpinions = [];
 
         private ClientSyncOpinion currentOpinion;
+        private bool stackTraceComparisonDisabled;
+
+        public void DisableStackTraceComparison()
+        {
+            stackTraceComparisonDisabled = true;
+            currentOpinion?.desyncStackTraceHashes.Clear();
+        }
 
         public int lastValidTick = -1;
         public bool arbiterWasPlayingOnLastValidTick;
@@ -209,7 +216,8 @@ namespace Multiplayer.Client
                 info2 = info2,
             });
 
-            OpinionInBuilding.desyncStackTraceHashes.Add(hash);
+            if (!stackTraceComparisonDisabled)
+                OpinionInBuilding.desyncStackTraceHashes.Add(hash);
         }
 
         public void TryAddStackTraceForDesyncLogRaw(StackTraceLogItemRaw item, int depth, int hashIn, string moreInfo = null)
@@ -238,7 +246,8 @@ namespace Multiplayer.Client
             OpinionInBuilding.desyncStackTraces.Add(item);
 
             // Track & network trace hash, for comparison with other opinions.
-            OpinionInBuilding.desyncStackTraceHashes.Add(hash);
+            if (!stackTraceComparisonDisabled)
+                OpinionInBuilding.desyncStackTraceHashes.Add(hash);
         }
 
         public static string MethodNameWithIL(string rawName)
