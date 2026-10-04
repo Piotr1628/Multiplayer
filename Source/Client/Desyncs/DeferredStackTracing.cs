@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -25,6 +26,13 @@ namespace Multiplayer.Client.Desyncs
         }
 
         public static int acc;
+        private static bool failed;
+
+        public static void Reset()
+        {
+            acc = 0;
+            failed = false;
+        }
 
         private static bool SupportsDeferredStackTracing =>
             RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.X86;
@@ -38,7 +46,31 @@ namespace Multiplayer.Client.Desyncs
             var trace = logItem.raw;
             int hash = 0;
             // Skip this (DeferredStackTracing.Postfix) frame. Keeping it in the trace doesn't provide any value.
-            int depth = DeferredStackTracingImpl.TraceImpl(trace, ref hash, skipFrames: 1);
+            int depth;
+            try
+            {
+                // Keep the native walk in this frame: a delegate wrapper would
+                // change the stack shape and the meaning of skipFrames.
+                depth = DeferredStackTracingImpl.TraceImpl(trace, ref hash, skipFrames: 1);
+            }
+            catch (Exception ex)
+            {
+                // A diagnostic must not abort the consumer of an RNG value.
+                // Disable partial trace comparisons as well; RNG state checks
+                // continue to detect real divergence.
+                failed = true;
+                Multiplayer.game?.sync?.DisableStackTraceComparison();
+                logItem.Dispose();
+                try
+                {
+                    ServerLog.Error($"Deferred stack tracing disabled for this game after {ex}. RNG state checks remain active.");
+                }
+                catch (Exception)
+                {
+                    // A modded logging callback must not break simulation either.
+                }
+                return;
+            }
 
             Multiplayer.game.sync.TryAddStackTraceForDesyncLogRaw(logItem, depth, hash);
 
@@ -47,7 +79,7 @@ namespace Multiplayer.Client.Desyncs
 
         public static bool ShouldAddStackTraceForDesyncLog()
         {
-            if (!SupportsDeferredStackTracing) return false;
+            if (failed || !SupportsDeferredStackTracing) return false;
             if (Multiplayer.Client == null) return false;
             if (Multiplayer.settings.desyncTracingMode == DesyncTracingMode.None) return false;
             if (Multiplayer.game == null) return false;
